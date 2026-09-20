@@ -341,6 +341,144 @@ npm run dev
 
 For a host process, use `postgresql://postgres:postgres@localhost:5432/auth_service` and `redis://localhost:6379`.
 
+## Prisma & PostgreSQL management
+
+Schema and migrations live under `auth_service/prisma/` (`schema.prisma`, `migrations/`). Prisma reads `DATABASE_URL` from `.env` (via `prisma.config.ts` at the repository root). Run all commands below from the **repository root** unless noted.
+
+### When to use which command
+
+| Goal | Command | Notes |
+| --- | --- | --- |
+| Regenerate the TypeScript client after schema changes | `npm run prisma:generate` | Run after every schema edit before starting or building the app |
+| Create and apply a versioned migration (recommended for shared/staging/production) | `npm run prisma:migrate` | Interactive `migrate dev`; prompts for a migration name |
+| Apply schema quickly without a migration file (local prototyping only) | `npx prisma db push` | Can alter or drop columns; use `--accept-data-loss` only when you accept data loss |
+| Apply pending migrations in CI/staging/production | `npx prisma migrate deploy` | Does not create new migrations; applies existing SQL under `migrations/` |
+| Inspect migration state | `npx prisma migrate status` | Shows applied vs pending migrations |
+| Open a database GUI | `npx prisma studio` | Browse/edit rows in development |
+| Validate `schema.prisma` syntax | `npx prisma validate` | Fast check without touching the database |
+
+Use **migrations** when the schema change should be reviewed, committed, and replayed on other machines. Use **`db push`** only for throwaway local experiments—not for production deploys.
+
+### Standard workflow after you change `schema.prisma`
+
+1. Edit `auth_service/prisma/schema.prisma`.
+2. Regenerate the client:
+
+```powershell
+npm run prisma:generate
+```
+
+3. Create and apply a migration (preferred):
+
+```powershell
+npm run prisma:migrate
+```
+
+When prompted, enter a short migration name (for example `add_user_phone`). Prisma writes SQL to `auth_service/prisma/migrations/` and updates PostgreSQL.
+
+4. Restart the app (`npm run dev` or rebuild/restart Docker) so runtime code picks up the new client.
+
+If you intentionally skip migration files during early local work:
+
+```powershell
+npx prisma db push
+npm run prisma:generate
+```
+
+Review Prisma’s diff output before confirming destructive changes.
+
+### First-time database setup
+
+**Host (PostgreSQL on `localhost:5432`, `.env` with host URLs):**
+
+```powershell
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev
+```
+
+If no migrations exist yet, `prisma migrate dev` creates the initial migration from the current schema.
+
+**Docker Compose (PostgreSQL in the `postgres` service):**
+
+1. Start the stack: `docker compose up -d --build`
+2. Apply schema from inside the auth container (uses in-network `DATABASE_URL`):
+
+```powershell
+docker compose exec auth-service npx prisma migrate deploy
+```
+
+For a fresh dev database without committed migrations yet, or to sync schema quickly:
+
+```powershell
+docker compose exec auth-service npx prisma db push
+docker compose exec auth-service npx prisma generate
+```
+
+From the **host** against the published Postgres port:
+
+```powershell
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/auth_service"
+npm run prisma:migrate
+```
+
+### Production and staging deploys
+
+1. Build or deploy application code that includes `auth_service/prisma/migrations/`.
+2. With `DATABASE_URL` set for the target environment, apply migrations:
+
+```powershell
+npx prisma migrate deploy
+```
+
+3. Run `npm run prisma:generate` in the image/build step so `@prisma/client` matches the schema (the Dockerfile/build pipeline should already do this before `npm run build`).
+
+Do not use `migrate dev` or `db push` against production databases.
+
+### Reset, troubleshoot, and recovery
+
+**Development only — wipe data and reapply migrations:**
+
+```powershell
+npx prisma migrate reset
+```
+
+This drops data, reapplies all migrations, and runs seed scripts if configured (none by default in this repo).
+
+**Migration failed or database drift:**
+
+```powershell
+npx prisma migrate status
+npx prisma validate
+```
+
+Fix `schema.prisma` or migration SQL, then rerun `npm run prisma:migrate` locally. Never edit applied migration files that already shipped to shared environments; add a new migration instead.
+
+**App fails with Prisma client / column errors after a pull:**
+
+```powershell
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+**Check connectivity (Postgres up, URL correct):**
+
+```powershell
+npx prisma migrate status
+```
+
+Or call `GET http://localhost:3000/health/ready` while the auth service is running.
+
+### Docker reference URLs
+
+| Where you run Prisma | Typical `DATABASE_URL` |
+| --- | --- |
+| Host machine → Compose Postgres | `postgresql://postgres:postgres@localhost:5432/auth_service` |
+| Inside `auth-service` container | `postgresql://postgres:postgres@postgres:5432/auth_service` |
+
+Inside the container, `localhost` is the container itself—use the `postgres` hostname from Compose.
+
 ## Error Responses
 
 Validation and authentication errors use this shape:
@@ -375,9 +513,10 @@ Never commit `.env`, production secrets, private signing keys, access tokens, re
 
 ```powershell
 docker compose logs -f auth-service
-docker compose exec auth-service npx prisma db push --accept-data-loss
 docker compose down
 docker compose down -v
 npm run build
 npx tsc --noEmit
 ```
+
+Database and Prisma workflows are documented in [Prisma & PostgreSQL management](#prisma--postgresql-management).
