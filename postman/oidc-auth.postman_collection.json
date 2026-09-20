@@ -1,0 +1,80 @@
+{
+  "info": {
+    "name": "OIDC Auth Service",
+    "description": "Direct auth API, health checks, and OIDC discovery for the local Docker Compose service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "email", "value": "alice@example.com" },
+    { "key": "password", "value": "CorrectHorseBattery12!" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "state", "value": "" },
+    { "key": "nonce", "value": "" },
+    { "key": "codeVerifier", "value": "" },
+    { "key": "codeChallenge", "value": "" },
+    { "key": "authorizationCode", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Live",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health/live" }
+        },
+        {
+          "name": "Ready",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health/ready" }
+        }
+      ]
+    },
+    {
+      "name": "Auth API",
+      "item": [
+        {
+          "name": "Register",
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }, "url": "{{baseUrl}}/api/auth/register" }
+        },
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }, "url": "{{baseUrl}}/api/auth/login" }
+        },
+        {
+          "name": "Refresh",
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "pm.collectionVariables.set('accessToken', body.accessToken);", "pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }, "url": "{{baseUrl}}/api/auth/refresh" }
+        },
+        {
+          "name": "Logout",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }, "url": "{{baseUrl}}/api/auth/logout" }
+        }
+      ]
+    },
+    {
+      "name": "OIDC",
+      "item": [
+        {
+          "name": "Discovery",
+          "request": { "method": "GET", "url": "{{baseUrl}}/oidc/.well-known/openid-configuration" }
+        },
+        {
+          "name": "JWKS",
+          "request": { "method": "GET", "url": "{{baseUrl}}/oidc/jwks" }
+        },
+        {
+          "name": "Authorization URL",
+          "event": [{ "listen": "prerequest", "script": { "exec": ["const bytes = CryptoJS.lib.WordArray.random(32);", "const verifier = CryptoJS.enc.Base64.stringify(bytes).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');", "const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');", "pm.collectionVariables.set('codeVerifier', verifier);", "pm.collectionVariables.set('codeChallenge', challenge);", "pm.collectionVariables.set('state', CryptoJS.lib.WordArray.random(16).toString());", "pm.collectionVariables.set('nonce', CryptoJS.lib.WordArray.random(16).toString());"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/oidc/auth?client_id=local-web&redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fcallback&response_type=code&scope=openid%20profile%20email&state={{state}}&nonce={{nonce}}&code_challenge={{codeChallenge}}&code_challenge_method=S256", "host": ["{{baseUrl}}"], "path": ["oidc", "auth"], "query": [{ "key": "client_id", "value": "local-web" }, { "key": "redirect_uri", "value": "http%3A%2F%2Flocalhost%3A3001%2Fcallback" }, { "key": "response_type", "value": "code" }, { "key": "scope", "value": "openid%20profile%20email" }, { "key": "state", "value": "{{state}}" }, { "key": "nonce", "value": "{{nonce}}" }, { "key": "code_challenge", "value": "{{codeChallenge}}" }, { "key": "code_challenge_method", "value": "S256" }] } }
+        },
+        {
+          "name": "Exchange Authorization Code",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }], "body": { "mode": "urlencoded", "urlencoded": [{ "key": "grant_type", "value": "authorization_code" }, { "key": "client_id", "value": "local-web" }, { "key": "client_secret", "value": "local-web-secret" }, { "key": "redirect_uri", "value": "http://localhost:3001/callback" }, { "key": "code", "value": "{{authorizationCode}}" }, { "key": "code_verifier", "value": "{{codeVerifier}}" }] }, "url": "{{baseUrl}}/oidc/token" }
+        }
+      ]
+    }
+  ]
+}

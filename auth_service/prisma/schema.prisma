@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  PENDING
+}
+
+enum Role {
+  SUPER_ADMIN
+  PARTNER_ADMIN
+  PARTNER_USER
+  CUSTOMER_ADMIN
+  CUSTOMER_USER
+}
+
+model User {
+  id          String           @id @default(uuid()) @db.Uuid
+  email       String           @unique
+  status      UserStatus       @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  credential  Credential?
+  sessions    RefreshSession[]
+  assignments RoleAssignment[]
+  customer    Customer?
+  partner     Partner?
+}
+
+model Credential {
+  userId       String   @id @db.Uuid
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+}
+
+model RoleAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  role      Role
+  partnerId String?  @db.Uuid
+  customerId String? @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Partner {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String
+  ownerId   String?          @unique @db.Uuid
+  owner     User?            @relation(fields: [ownerId], references: [id])
+  customers Customer[]
+}
+
+model Customer {
+  id        String  @id @default(uuid()) @db.Uuid
+  name      String
+  partnerId String  @db.Uuid
+  ownerId   String? @unique @db.Uuid
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  owner     User?   @relation(fields: [ownerId], references: [id])
+
+  @@index([partnerId])
+}
