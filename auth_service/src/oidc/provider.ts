@@ -1,20 +1,14 @@
-import { exportJWK, generateKeyPair } from "jose";
 import Provider from "oidc-provider";
 import { env } from "../config/env.js";
 import { prisma } from "../db/prisma.js";
 import { redis } from "../db/redis.js";
+import { getSigningMaterial } from "./signing-keys.js";
 import { RedisAdapter } from "./adapter/redis.adapter.js";
 
 type OidcAccount = {
   accountId: string;
   claims: (use: string, scope?: string) => Promise<Record<string, unknown>>;
 };
-
-async function developmentJwks(): Promise<{ keys: Record<string, unknown>[] }> {
-  const { privateKey } = await generateKeyPair("RS256", { modulusLength: 2048, extractable: true });
-  const key = await exportJWK(privateKey);
-  return { keys: [{ ...key, kid: "development", alg: "RS256", use: "sig" }] };
-}
 
 async function findAccount(_ctx: unknown, accountId: string): Promise<OidcAccount | undefined> {
   const user = await prisma.user.findUnique({ where: { id: accountId } });
@@ -23,7 +17,11 @@ async function findAccount(_ctx: unknown, accountId: string): Promise<OidcAccoun
     accountId: user.id,
     claims: async (use, scope) => {
       const claims: Record<string, unknown> = { sub: user.id };
-      if (use === "userinfo" || scope?.includes("profile")) claims.email = user.email;
+      if (use === "userinfo" || scope?.includes("profile")) {
+        claims.name = user.name;
+        claims.address = user.address;
+        if (user.phone) claims.phone_number = user.phone;
+      }
       if (scope?.includes("email")) {
         claims.email = user.email;
         claims.email_verified = false;
@@ -35,7 +33,7 @@ async function findAccount(_ctx: unknown, accountId: string): Promise<OidcAccoun
 
 export async function createOidcProvider(): Promise<Provider> {
   const issuer = env.OIDC_ISSUER_URL ?? `${env.ISSUER_URL.replace(/\/$/, "")}/oidc`;
-  const jwks = await developmentJwks();
+  const { jwks } = await getSigningMaterial();
   const provider = new Provider(issuer, {
     adapter: (model: string) => new RedisAdapter(model, redis),
     jwks,

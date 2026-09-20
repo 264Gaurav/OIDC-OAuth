@@ -23,6 +23,9 @@ enum Role {
 model User {
   id          String           @id @default(uuid()) @db.Uuid
   email       String           @unique
+  name        String           @default("")
+  address     String           @default("")
+  phone       String?
   status      UserStatus       @default(PENDING)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt

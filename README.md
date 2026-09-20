@@ -5,7 +5,7 @@ This repository contains the first MVP vertical slice of the authentication serv
 
 ### Setup
 
-1. Copy `.env.example` to `.env` and set a random `ACCESS_TOKEN_SECRET` of at least 32 characters.
+1. Copy `.env.example` to `.env`. For production, set `OIDC_SIGNING_PRIVATE_JWK` to a stable RSA private JWK (JSON). Local dev can omit it and the service generates ephemeral keys per process.
 2. Start PostgreSQL and Redis.
 3. Run `npm run prisma:generate`.
 4. Apply the schema with `npm run prisma:migrate`.
@@ -34,6 +34,8 @@ POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/refresh
 POST /api/auth/logout
+GET  /utils/createPublicKey
+POST /utils/createPublicKey
 GET  /health/live
 GET  /health/ready
 ```
@@ -113,7 +115,10 @@ Content-Type: application/json
 
 {
 	"email": "alice@example.com",
-	"password": "CorrectHorseBattery12!"
+	"password": "CorrectHorseBattery12!",
+	"name": "Alice Example",
+	"address": "1 Example Street, Example City",
+	"phone": "+1-555-0100"
 }
 ```
 
@@ -122,6 +127,7 @@ Response `201`:
 ```json
 {
 	"accessToken": "<signed-access-token>",
+	"idToken": "<identity-token>",
 	"refreshToken": "<opaque-refresh-token>",
 	"expiresIn": 900
 }
@@ -138,6 +144,8 @@ Content-Type: application/json
 	"password": "CorrectHorseBattery12!"
 }
 ```
+
+Login and refresh also return `idToken`. Direct API access and ID tokens are RS256 JWTs signed with the same keys published at `/oidc/jwks`. The ID token contains `iss`, `sub`, `aud`, `email`, `name`, `address`, optional `phone`, `roles`, `iat`, and `exp` claims. Its audience is `auth-api` by default. Use it for client identity information; use `accessToken` for API authorization. Standard OIDC authorization-code clients should still obtain tokens from `/oidc/token`.
 
 ### Refresh
 
@@ -180,6 +188,67 @@ http://localhost:3000/oidc/jwks
 ```
 
 Do not send refresh tokens to resource services.
+
+## Utils API
+
+### Get the current signing public key (PEM)
+
+Returns the active OIDC signing public key for this running service (the same key material published at `/oidc/jwks`).
+
+```http
+GET http://localhost:3000/utils/createPublicKey
+```
+
+Open that URL in a browser to view a readable HTML page with issuer metadata, the PEM block, and the public JWK. API clients receive JSON (`Accept: application/json` or tools such as curl/Postman):
+
+```json
+{
+	"issuer": "http://localhost:3000/oidc",
+	"jwksUrl": "http://localhost:3000/oidc/jwks",
+	"kid": "sig-1",
+	"alg": "RS256",
+	"use": "sig",
+	"kty": "RSA",
+	"publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n",
+	"jwk": {
+		"kty": "RSA",
+		"n": "...",
+		"e": "AQAB",
+		"kid": "sig-1",
+		"alg": "RS256",
+		"use": "sig"
+	}
+}
+```
+
+The PEM string uses real line breaks in JSON (not escaped `\\n` text). No authentication is required.
+
+### Create PEM public key from JWKS
+
+Some runtimes and libraries expect an RSA public key in PEM (SPKI) form instead of JWK `n` and `e` values. Copy the public key entry from `GET /oidc/jwks` and POST it to this helper endpoint.
+
+```http
+POST http://localhost:3000/utils/createPublicKey
+Content-Type: application/json
+
+{
+	"kty": "RSA",
+	"n": "<modulus-from-jwks>",
+	"e": "AQAB"
+}
+```
+
+You may also include optional JWK metadata such as `alg`, `kid`, and `use` when copying from JWKS; they are accepted but not required for conversion.
+
+Response `200`:
+
+```json
+{
+	"publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+}
+```
+
+Required JSON fields are `kty` (must be `RSA`), `n`, and `e`. Invalid input returns `400`. No authentication is required; only public key material is accepted.
 
 ## OIDC API
 
@@ -293,7 +362,8 @@ Common statuses are `400` for invalid input, `401` for invalid credentials or to
 | `OIDC_ISSUER_URL` | Full OIDC issuer URL |
 | `DATABASE_URL` | PostgreSQL connection URL |
 | `REDIS_URL` | Redis connection URL |
-| `ACCESS_TOKEN_SECRET` | At least 32 random characters for direct API tokens |
+| `OIDC_SIGNING_PRIVATE_JWK` | Optional RSA private JWK (JSON) for stable RS256 signing; omit in dev to auto-generate |
+| `ID_TOKEN_AUDIENCE` | Audience for direct API ID tokens, default `auth-api` |
 | `ACCESS_TOKEN_TTL` | Direct API access-token lifetime in seconds |
 | `ID_TOKEN_TTL` | OIDC ID-token lifetime in seconds |
 | `AUTHORIZATION_CODE_TTL` | OIDC authorization-code lifetime in seconds |

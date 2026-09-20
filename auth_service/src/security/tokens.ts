@@ -1,30 +1,35 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
+import { SignJWT, jwtVerify } from "jose";
+import { getSigningMaterial, SIGNING_KEY_ID } from "../oidc/signing-keys.js";
 
 type AccessClaims = { sub: string; roles: string[]; iat: number; exp: number };
 
-function encode(value: object): string {
-  return Buffer.from(JSON.stringify(value)).toString("base64url");
+export async function createAccessToken(userId: string, roles: string[], ttlSeconds: number): Promise<string> {
+  const { privateKey, issuer } = await getSigningMaterial();
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({ roles })
+    .setProtectedHeader({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID })
+    .setIssuer(issuer)
+    .setSubject(userId)
+    .setIssuedAt(now)
+    .setExpirationTime(now + ttlSeconds)
+    .sign(privateKey);
 }
 
-export function createAccessToken(userId: string, roles: string[], secret: string, ttlSeconds: number): string {
-  const header = encode({ alg: "HS256", typ: "JWT" });
-  const payload = encode({ sub: userId, roles, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + ttlSeconds });
-  const data = `${header}.${payload}`;
-  const signature = createHmac("sha256", secret).update(data).digest("base64url");
-  return `${data}.${signature}`;
-}
-
-export function verifyAccessToken(token: string, secret: string): AccessClaims | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [header, payload, signature] = parts;
-  if (!header || !payload || !signature) return null;
-  const expected = createHmac("sha256", secret).update(`${header}.${payload}`).digest();
-  const actual = Buffer.from(signature, "base64url");
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+export async function verifyAccessToken(token: string): Promise<AccessClaims | null> {
   try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as AccessClaims;
-    return claims.exp > Math.floor(Date.now() / 1000) ? claims : null;
+    const { publicKey, issuer } = await getSigningMaterial();
+    const { payload } = await jwtVerify(token, publicKey, { issuer, algorithms: ["RS256"] });
+    const roles = payload.roles;
+    if (typeof payload.sub !== "string" || !Array.isArray(roles) || !roles.every((role) => typeof role === "string")) {
+      return null;
+    }
+    return {
+      sub: payload.sub,
+      roles,
+      iat: payload.iat ?? 0,
+      exp: payload.exp ?? 0
+    };
   } catch {
     return null;
   }
@@ -36,4 +41,33 @@ export function createRefreshToken(): string {
 
 export function hashToken(token: string): string {
   return createHmac("sha256", token).digest("hex");
+}
+
+export async function createIdToken(
+  userId: string,
+  email: string,
+  name: string,
+  address: string,
+  phone: string | null,
+  roles: string[],
+  issuer: string,
+  audience: string,
+  ttlSeconds: number
+): Promise<string> {
+  const { privateKey } = await getSigningMaterial();
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({
+    email,
+    name,
+    address,
+    ...(phone ? { phone } : {}),
+    roles
+  })
+    .setProtectedHeader({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID })
+    .setIssuer(issuer)
+    .setSubject(userId)
+    .setAudience(audience)
+    .setIssuedAt(now)
+    .setExpirationTime(now + ttlSeconds)
+    .sign(privateKey);
 }

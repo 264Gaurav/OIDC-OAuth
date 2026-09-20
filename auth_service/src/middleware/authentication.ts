@@ -1,5 +1,4 @@
 import type { RequestHandler } from "express";
-import { env } from "../config/env.js";
 import { verifyAccessToken } from "../security/tokens.js";
 import { AuthError } from "../auth/auth.service.js";
 
@@ -11,13 +10,13 @@ declare global {
   }
 }
 
-export const authentication: RequestHandler = (request, _response, next) => {
+export const authentication: RequestHandler = async (request, _response, next) => {
   const value = request.header("authorization");
   if (!value?.startsWith("Bearer ")) {
     next(new AuthError(401, "Authentication required"));
     return;
   }
-  const claims = verifyAccessToken(value.slice(7), env.ACCESS_TOKEN_SECRET);
+  const claims = await verifyAccessToken(value.slice(7));
   if (!claims) {
     next(new AuthError(401, "Invalid access token"));
     return;

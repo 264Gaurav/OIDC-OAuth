@@ -3,6 +3,7 @@ import helmet from "helmet";
 
 import { healthRoutes } from "../routes/health.routes";
 import { authRoutes } from "../routes/auth.routes";
+import { utilsRoutes } from "../routes/utils.routes";
 import { errorHandler } from "../middleware/error-handler";
 import { notFound } from "../middleware/not-found";
 import { requestId } from "../middleware/request-id";
@@ -23,6 +24,7 @@ export async function createApp() {
   app.use("/health", healthRoutes);
   app.use("/oidc", oidcProvider.callback() as express.RequestHandler);
   app.use("/api/auth", authRoutes);
+  app.use("/utils", utilsRoutes);
   app.use(notFound);
   app.use(errorHandler);
 

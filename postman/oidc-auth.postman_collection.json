@@ -10,6 +10,7 @@
     { "key": "password", "value": "CorrectHorseBattery12!" },
     { "key": "accessToken", "value": "" },
     { "key": "refreshToken", "value": "" },
+    { "key": "idToken", "value": "" },
     { "key": "state", "value": "" },
     { "key": "nonce", "value": "" },
     { "key": "codeVerifier", "value": "" },
@@ -35,17 +36,17 @@
       "item": [
         {
           "name": "Register",
-          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }, "url": "{{baseUrl}}/api/auth/register" }
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Alice Example\",\n  \"address\": \"1 Example Street, Example City\",\n  \"phone\": \"+1-555-0100\"\n}" }, "url": "{{baseUrl}}/api/auth/register" }
         },
         {
           "name": "Login",
-          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
           "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }, "url": "{{baseUrl}}/api/auth/login" }
         },
         {
           "name": "Refresh",
-          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "pm.collectionVariables.set('accessToken', body.accessToken);", "pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "pm.collectionVariables.set('accessToken', body.accessToken);", "pm.collectionVariables.set('idToken', body.idToken);", "pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
           "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }, "url": "{{baseUrl}}/api/auth/refresh" }
         },
         {

@@ -12,7 +12,8 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.url(),
-  ACCESS_TOKEN_SECRET: z.string().min(32),
+  OIDC_SIGNING_PRIVATE_JWK: z.string().min(1).optional(),
+  ID_TOKEN_AUDIENCE: z.string().min(1).default("auth-api"),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(900),
   ID_TOKEN_TTL: z.coerce.number().int().positive().default(900),
