@@ -7,6 +7,7 @@ The service exposes two primary integration surfaces:
 - **Direct Auth & Tenancy API** under `/api` for trusted backend, first-party web apps, and management workflows (`/api/auth`, `/api/partners`, `/api/customers`, `/api/users`).
 - **OAuth 2.0 / OpenID Connect Provider** at `/oidc` for browser, SPA, native, and third-party OIDC-compatible clients.
 - **Utility & Health Endpoints** at `/utils` (public key exports) and `/health` (liveness and readiness probes).
+- **User & Group Management Guide:** See [userAndGroupManagement.md](userAndGroupManagement.md) for a comprehensive step-by-step walkthrough covering role hierarchies, partner organizations, customer groups, and membership provisioning.
 
 ## Prerequisites
 
@@ -65,7 +66,7 @@ All three requests should return `200` when PostgreSQL and Redis are ready.
 
 All request bodies are JSON. Passwords must contain 12 to 128 characters.
 
-> **Bootstrap Note:** The very first user who registers via `POST /api/auth/register` is automatically provisioned as `SUPER_ADMIN` with platform-level scope. Once a super admin exists, direct public registration is locked (`403 Registration is invite-only`). All subsequent users are added by admins through the partner or customer member APIs.
+> **Bootstrap Note:** The very first user who registers via `POST /api/auth/register` is automatically provisioned as `SUPER_ADMIN` with platform-level scope. Once a super admin exists, direct public registration is locked (`403 Registration is invite-only`). All subsequent users are added by admins through the partner or customer member APIs. For the complete onboarding flow, refer to the [User & Group Management Guide](userAndGroupManagement.md).
 
 ### Register
 
@@ -288,6 +289,8 @@ Use the discovery response as the source of truth for endpoint URLs and supporte
 ## API Reference
 
 All request bodies are `application/json` unless noted. Required fields are marked *(required)*, optional with `?`.
+
+> For a complete end-to-end walkthrough on user provisioning, organization hierarchy (Partners & Customer Groups), and permission matrices, refer to the [User & Group Management Guide](userAndGroupManagement.md).
 
 ---
 
@@ -517,7 +520,7 @@ Content-Type: application/json
 
 ### Customer Routes (`/api/customers`)
 
-> All customer routes require `Authorization: Bearer <access-token>`.
+> All customer routes require `Authorization: Bearer <access-token>`. For customer administration workflows and member provisioning guides, see the [User & Group Management Guide](userAndGroupManagement.md).
 
 #### `GET /api/customers/:id`
 
@@ -593,7 +596,7 @@ Content-Type: application/json
 
 ### Partner Routes (`/api/partners`)
 
-> All partner routes require `Authorization: Bearer <access-token>`.
+> All partner routes require `Authorization: Bearer <access-token>`. For partner provisioning and tenant management workflows, see the [User & Group Management Guide](userAndGroupManagement.md).
 
 #### `POST /api/partners`
 
@@ -896,17 +899,44 @@ The development interaction UI is not suitable for production. Production must p
 
 Import [postman/oidc-auth.postman_collection.json](postman/oidc-auth.postman_collection.json) into Postman.
 
-Run the requests in this order:
+The collection is organized into modular folders covering all API surfaces:
 
-1. `Health / Live`
-2. `Health / Ready`
-3. `OIDC / Discovery`
-4. `Auth / Register`
-5. `Auth / Login`
-6. `Auth / Refresh`
-7. `Auth / Logout`
+- **Health:** Process liveness and database/Redis readiness probes (`/health/live`, `/health/ready`).
+- **Auth API:** Direct registration (bootstrap Super Admin), credential logins with role/tenant context hints, token refresh rotation, session context switching, and logout (`/api/auth/*`).
+- **Partners:** Creating partner organizations, retrieving details, provisioning customer groups, and assigning partner members (`/api/partners/*`).
+- **Customers:** Retrieving customer details, adding customer admins, and adding customer users (`/api/customers/*`).
+- **Users:** Querying user profiles and active membership records (`/api/users/:id`).
+- **Utils:** Fetching active OIDC signing public key in JSON or converting JWK parameters to PEM format (`/utils/createPublicKey`).
+- **OIDC:** Discovery (`/.well-known/openid-configuration`), JWKS export (`/jwks`), PKCE authorization code generator (`/auth`), token exchange (`/token`), and UserInfo (`/me`).
 
-The collection stores access and refresh tokens automatically from register, login, and refresh responses. The OIDC authorization request is included as a browser-oriented request; complete its development interaction in a browser, then use the returned code with the token request.
+### Automated Variable Capture
+The collection automatically captures and propagates variables across requests:
+- `accessToken`, `idToken`, and `refreshToken` are updated on Register, Login, Refresh, and Context Switch.
+- `userId` is extracted from claims upon registration or login.
+- `partnerId` is captured when creating a partner.
+- `customerId` is captured when creating a customer group.
+- `targetUserId` is captured when provisioning members.
+
+### Quick Start: Basic Auth Lifecycle
+1. `Health / Live` & `Health / Ready`
+2. `Auth API / Register (Bootstrap Super Admin)`
+3. `Auth API / Login (Super Admin)`
+4. `Auth API / Refresh Token`
+5. `Auth API / Logout`
+
+### End-to-End Multi-Tenant Hierarchy Flow
+For a complete step-by-step walkthrough detailing how to provision partners, customer groups, and assign roles across the tenant hierarchy in Postman, refer to the [User & Group Management Guide](userAndGroupManagement.md).
+
+Recommended execution sequence:
+1. **Bootstrap Super Admin:** `Auth API / Register (Bootstrap Super Admin)`
+2. **Create Partner Organization & Admin:** `Partners / Create Partner + Admin` (automatically captures `partnerId`)
+3. **Log In as Partner Admin:** `Auth API / Login (Partner Admin)` (binds session to the partner)
+4. **Create Customer Group:** `Partners / Create Customer Group under Partner` (automatically captures `customerId`)
+5. **Add Customer Admin:** `Customers / Add Customer Admin Member`
+6. **Log In as Customer Admin:** `Auth API / Login (Customer Admin)` (binds session to the customer group)
+7. **Add Customer User:** `Customers / Add Customer User Member`
+8. **Inspect Profiles:** `Users / Get User Profile (Self)` or `Users / Get User Profile (Target Member)`
+9. **Switch Active Context:** `Auth API / Switch Context` (e.g. switch between roles or organizations)
 
 ## Running Without Docker
 

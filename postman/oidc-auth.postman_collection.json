@@ -1,21 +1,102 @@
 {
   "info": {
     "name": "OIDC Auth Service",
-    "description": "Direct auth API, health checks, and OIDC discovery for the local Docker Compose service.",
+    "description": "Complete API collection for OIDC Auth Service: Health, Direct Authentication, Multi-Tenant Management (Partners, Customers, Memberships), User Profiles, Utils (Public Keys), and OpenID Connect (OIDC).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "email", "value": "alice@example.com" },
-    { "key": "password", "value": "CorrectHorseBattery12!" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "idToken", "value": "" },
-    { "key": "state", "value": "" },
-    { "key": "nonce", "value": "" },
-    { "key": "codeVerifier", "value": "" },
-    { "key": "codeChallenge", "value": "" },
-    { "key": "authorizationCode", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "email",
+      "value": "alice@example.com"
+    },
+    {
+      "key": "password",
+      "value": "CorrectHorseBattery12!"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "idToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "partnerId",
+      "value": ""
+    },
+    {
+      "key": "customerId",
+      "value": ""
+    },
+    {
+      "key": "targetUserId",
+      "value": ""
+    },
+    {
+      "key": "partnerAdminEmail",
+      "value": "partneradmin@acme.com"
+    },
+    {
+      "key": "partnerAdminPassword",
+      "value": "PartnerSecure12!"
+    },
+    {
+      "key": "customerAdminEmail",
+      "value": "customeradmin@retail.com"
+    },
+    {
+      "key": "customerAdminPassword",
+      "value": "CustomerSecure12!"
+    },
+    {
+      "key": "partnerUserEmail",
+      "value": "partneruser@acme.com"
+    },
+    {
+      "key": "partnerUserPassword",
+      "value": "PartnerUser12!"
+    },
+    {
+      "key": "customerUserEmail",
+      "value": "customeruser@retail.com"
+    },
+    {
+      "key": "customerUserPassword",
+      "value": "UserPassword12!"
+    },
+    {
+      "key": "state",
+      "value": ""
+    },
+    {
+      "key": "nonce",
+      "value": ""
+    },
+    {
+      "key": "codeVerifier",
+      "value": ""
+    },
+    {
+      "key": "codeChallenge",
+      "value": ""
+    },
+    {
+      "key": "authorizationCode",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -23,11 +104,19 @@
       "item": [
         {
           "name": "Live",
-          "request": { "method": "GET", "url": "{{baseUrl}}/health/live" }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/live"
+          }
         },
         {
           "name": "Ready",
-          "request": { "method": "GET", "url": "{{baseUrl}}/health/ready" }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/ready"
+          }
         }
       ]
     },
@@ -35,23 +124,472 @@
       "name": "Auth API",
       "item": [
         {
-          "name": "Register",
-          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Alice Example\",\n  \"address\": \"1 Example Street, Example City\",\n  \"phone\": \"+1-555-0100\"\n}" }, "url": "{{baseUrl}}/api/auth/register" }
+          "name": "Register (Bootstrap Super Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);",
+                  "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "if (body.claims && body.claims.sub) pm.collectionVariables.set('userId', body.claims.sub);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Alice Super Admin\",\n  \"address\": \"Platform HQ, Example City\",\n  \"phone\": \"+1-555-0100\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
         },
         {
-          "name": "Login",
-          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);", "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" }, "url": "{{baseUrl}}/api/auth/login" }
+          "name": "Login (Super Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);",
+                  "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "if (body.claims && body.claims.sub) pm.collectionVariables.set('userId', body.claims.sub);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"role\": \"SUPER_ADMIN\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
         },
         {
-          "name": "Refresh",
-          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "pm.collectionVariables.set('accessToken', body.accessToken);", "pm.collectionVariables.set('idToken', body.idToken);", "pm.collectionVariables.set('refreshToken', body.refreshToken);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }, "url": "{{baseUrl}}/api/auth/refresh" }
+          "name": "Login (Partner Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);",
+                  "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "if (body.claims && body.claims.sub) pm.collectionVariables.set('userId', body.claims.sub);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{partnerAdminEmail}}\",\n  \"password\": \"{{partnerAdminPassword}}\",\n  \"role\": \"PARTNER_ADMIN\",\n  \"partnerId\": \"{{partnerId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login (Customer Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);",
+                  "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "if (body.claims && body.claims.sub) pm.collectionVariables.set('userId', body.claims.sub);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerAdminEmail}}\",\n  \"password\": \"{{customerAdminPassword}}\",\n  \"role\": \"CUSTOMER_ADMIN\",\n  \"customerId\": \"{{customerId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);",
+                  "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/refresh"
+          }
+        },
+        {
+          "name": "Switch Context",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "if (body.idToken) pm.collectionVariables.set('idToken', body.idToken);",
+                  "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"PARTNER_ADMIN\",\n  \"partnerId\": \"{{partnerId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/context"
+          }
         },
         {
           "name": "Logout",
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }, "url": "{{baseUrl}}/api/auth/logout" }
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Partners",
+      "item": [
+        {
+          "name": "Create Partner + Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.partner && body.partner.id) pm.collectionVariables.set('partnerId', body.partner.id);",
+                  "if (body.admin && body.admin.id) pm.collectionVariables.set('targetUserId', body.admin.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Partner Inc.\",\n  \"admin\": {\n    \"email\": \"{{partnerAdminEmail}}\",\n    \"password\": \"{{partnerAdminPassword}}\",\n    \"name\": \"Partner Admin\",\n    \"address\": \"123 Partner Street\",\n    \"phone\": \"+1-555-0199\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/partners"
+          }
+        },
+        {
+          "name": "Get Partner by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/partners/{{partnerId}}"
+          }
+        },
+        {
+          "name": "Create Customer Group under Partner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.id) pm.collectionVariables.set('customerId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Retail Customer Corp\"\n}"
+            },
+            "url": "{{baseUrl}}/api/partners/{{partnerId}}/customers"
+          }
+        },
+        {
+          "name": "Add Partner Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.user && body.user.id) pm.collectionVariables.set('targetUserId', body.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{partnerUserEmail}}\",\n  \"password\": \"{{partnerUserPassword}}\",\n  \"name\": \"Partner User\",\n  \"address\": \"123 Partner Street\",\n  \"phone\": \"+1-555-0299\",\n  \"role\": \"PARTNER_USER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/partners/{{partnerId}}/members"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Get Customer by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}"
+          }
+        },
+        {
+          "name": "Add Customer Admin Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.user && body.user.id) pm.collectionVariables.set('targetUserId', body.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerAdminEmail}}\",\n  \"password\": \"{{customerAdminPassword}}\",\n  \"name\": \"Customer Admin\",\n  \"address\": \"456 Retail Road\",\n  \"phone\": \"+1-555-0200\",\n  \"role\": \"CUSTOMER_ADMIN\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/members"
+          }
+        },
+        {
+          "name": "Add Customer User Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.user && body.user.id) pm.collectionVariables.set('targetUserId', body.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerUserEmail}}\",\n  \"password\": \"{{customerUserPassword}}\",\n  \"name\": \"Regular Customer User\",\n  \"address\": \"789 User Lane\",\n  \"phone\": \"+1-555-0300\",\n  \"role\": \"CUSTOMER_USER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/members"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get User Profile (Self)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Get User Profile (Target Member)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{targetUserId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Utils",
+      "item": [
+        {
+          "name": "Get Signing Public Key (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/utils/createPublicKey"
+          }
+        },
+        {
+          "name": "Convert JWK to PEM",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kty\": \"RSA\",\n  \"n\": \"u1SU1LfQuPtweZ243vG2938Q4j9uF0aA_sample_key_modulus\",\n  \"e\": \"AQAB\"\n}"
+            },
+            "url": "{{baseUrl}}/utils/createPublicKey"
+          }
         }
       ]
     },
@@ -60,20 +598,141 @@
       "item": [
         {
           "name": "Discovery",
-          "request": { "method": "GET", "url": "{{baseUrl}}/oidc/.well-known/openid-configuration" }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/oidc/.well-known/openid-configuration"
+          }
         },
         {
           "name": "JWKS",
-          "request": { "method": "GET", "url": "{{baseUrl}}/oidc/jwks" }
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/oidc/jwks"
+          }
         },
         {
           "name": "Authorization URL",
-          "event": [{ "listen": "prerequest", "script": { "exec": ["const bytes = CryptoJS.lib.WordArray.random(32);", "const verifier = CryptoJS.enc.Base64.stringify(bytes).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');", "const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');", "pm.collectionVariables.set('codeVerifier', verifier);", "pm.collectionVariables.set('codeChallenge', challenge);", "pm.collectionVariables.set('state', CryptoJS.lib.WordArray.random(16).toString());", "pm.collectionVariables.set('nonce', CryptoJS.lib.WordArray.random(16).toString());"] } }],
-          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/oidc/auth?client_id=local-web&redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fcallback&response_type=code&scope=openid%20profile%20email&state={{state}}&nonce={{nonce}}&code_challenge={{codeChallenge}}&code_challenge_method=S256", "host": ["{{baseUrl}}"], "path": ["oidc", "auth"], "query": [{ "key": "client_id", "value": "local-web" }, { "key": "redirect_uri", "value": "http%3A%2F%2Flocalhost%3A3001%2Fcallback" }, { "key": "response_type", "value": "code" }, { "key": "scope", "value": "openid%20profile%20email" }, { "key": "state", "value": "{{state}}" }, { "key": "nonce", "value": "{{nonce}}" }, { "key": "code_challenge", "value": "{{codeChallenge}}" }, { "key": "code_challenge_method", "value": "S256" }] } }
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const bytes = CryptoJS.lib.WordArray.random(32);",
+                  "const verifier = CryptoJS.enc.Base64.stringify(bytes).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "const challenge = CryptoJS.SHA256(verifier).toString(CryptoJS.enc.Base64).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+                  "pm.collectionVariables.set('codeVerifier', verifier);",
+                  "pm.collectionVariables.set('codeChallenge', challenge);",
+                  "pm.collectionVariables.set('state', CryptoJS.lib.WordArray.random(16).toString());",
+                  "pm.collectionVariables.set('nonce', CryptoJS.lib.WordArray.random(16).toString());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oidc/auth?client_id=local-web&redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fcallback&response_type=code&scope=openid%20profile%20email&state={{state}}&nonce={{nonce}}&code_challenge={{codeChallenge}}&code_challenge_method=S256",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oidc",
+                "auth"
+              ],
+              "query": [
+                {
+                  "key": "client_id",
+                  "value": "local-web"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "http%3A%2F%2Flocalhost%3A3001%2Fcallback"
+                },
+                {
+                  "key": "response_type",
+                  "value": "code"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid%20profile%20email"
+                },
+                {
+                  "key": "state",
+                  "value": "{{state}}"
+                },
+                {
+                  "key": "nonce",
+                  "value": "{{nonce}}"
+                },
+                {
+                  "key": "code_challenge",
+                  "value": "{{codeChallenge}}"
+                },
+                {
+                  "key": "code_challenge_method",
+                  "value": "S256"
+                }
+              ]
+            }
+          }
         },
         {
           "name": "Exchange Authorization Code",
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }], "body": { "mode": "urlencoded", "urlencoded": [{ "key": "grant_type", "value": "authorization_code" }, { "key": "client_id", "value": "local-web" }, { "key": "client_secret", "value": "local-web-secret" }, { "key": "redirect_uri", "value": "http://localhost:3001/callback" }, { "key": "code", "value": "{{authorizationCode}}" }, { "key": "code_verifier", "value": "{{codeVerifier}}" }] }, "url": "{{baseUrl}}/oidc/token" }
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "authorization_code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "local-web"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "local-web-secret"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "http://localhost:3001/callback"
+                },
+                {
+                  "key": "code",
+                  "value": "{{authorizationCode}}"
+                },
+                {
+                  "key": "code_verifier",
+                  "value": "{{codeVerifier}}"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/oidc/token"
+          }
+        },
+        {
+          "name": "User Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/oidc/me"
+          }
         }
       ]
     }
