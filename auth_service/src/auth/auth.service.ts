@@ -1,101 +1,160 @@
+import { Prisma } from "@prisma/client";
 import { createAccessToken, createIdToken, createRefreshToken, hashToken } from "../security/tokens.js";
 import { hashPassword, verifyPassword } from "../security/password.js";
 import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
+import { AppError, AuthError } from "../errors/app-error.js";
+import { normalizeEmail } from "../utils/email.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { membershipRepository } from "../repositories/membership.repository.js";
+import { sessionRepository } from "../repositories/session.repository.js";
+import {
+  buildAuthClaims,
+  pickDefaultMembership,
+  ROLES,
+  type AuthClaims,
+  type ContextHint,
+  type MembershipSnapshot
+} from "../policy/index.js";
+import type { DbClient } from "../repositories/types.js";
 
-export class AuthError extends Error {
-  constructor(public readonly statusCode: number, message: string) {
-    super(message);
-  }
-}
+export { AppError, AuthError };
 
-type AuthResult = { accessToken: string; idToken: string; refreshToken: string; expiresIn: number };
+export type AuthResult = {
+  accessToken: string;
+  idToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  claims: AuthClaims;
+};
 
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
+type Profile = { id: string; email: string; name: string; address: string; phone: string | null };
+
+export type StoredMembership = MembershipSnapshot & { id: string };
 
 function oidcIssuer(): string {
   return env.OIDC_ISSUER_URL ?? `${env.ISSUER_URL.replace(/\/$/, "")}/oidc`;
 }
 
-async function issueTokens(user: { id: string; email: string; name: string; address: string; phone: string | null }, roles: string[]): Promise<AuthResult> {
-  const refreshToken = createRefreshToken();
-  await prisma.refreshSession.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(refreshToken),
-      expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL * 1000)
-    }
-  });
+export function toStoredMembership(row: {
+  id: string;
+  userId: string;
+  role: MembershipSnapshot["role"];
+  partnerId: string | null;
+  customerId: string | null;
+}): StoredMembership {
   return {
-    accessToken: await createAccessToken(user.id, roles, env.ACCESS_TOKEN_TTL),
-    idToken: await createIdToken(user.id, user.email, user.name, user.address, user.phone, roles, oidcIssuer(), env.ID_TOKEN_AUDIENCE, env.ID_TOKEN_TTL),
-    refreshToken,
-    expiresIn: env.ACCESS_TOKEN_TTL
+    id: row.id,
+    userId: row.userId,
+    role: row.role,
+    partnerId: row.partnerId,
+    customerId: row.customerId
   };
 }
 
-export async function register(email: string, password: string, name: string, address: string, phone?: string): Promise<AuthResult> {
-  const normalizedEmail = normalizeEmail(email);
-  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existing) throw new AuthError(409, "An account with this email already exists");
-
-  const user = await prisma.user.create({
-    data: {
-      email: normalizedEmail,
-      name: name.trim(),
-      address: address.trim(),
-      phone: phone?.trim() || null,
-      status: "ACTIVE",
-      credential: { create: { passwordHash: await hashPassword(password) } }
-    }
+async function issueTokens(user: Profile, membership: StoredMembership, db: DbClient = prisma): Promise<AuthResult> {
+  const claims = buildAuthClaims(membership);
+  const refreshToken = createRefreshToken();
+  await sessionRepository(db).create({
+    userId: user.id,
+    membershipId: membership.id,
+    tokenHash: hashToken(refreshToken),
+    expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL * 1000)
   });
-  return issueTokens(user, []);
+  return {
+    accessToken: await createAccessToken(claims, env.ACCESS_TOKEN_TTL),
+    idToken: await createIdToken(claims, user, oidcIssuer(), env.ID_TOKEN_AUDIENCE, env.ID_TOKEN_TTL),
+    refreshToken,
+    expiresIn: env.ACCESS_TOKEN_TTL,
+    claims
+  };
 }
 
-export async function login(email: string, password: string): Promise<AuthResult> {
-  const user = await prisma.user.findUnique({
-    where: { email: normalizeEmail(email) },
-    include: { credential: true, assignments: true }
-  });
-  if (!user?.credential || !(await verifyPassword(user.credential.passwordHash, password))) {
-    throw new AuthError(401, "Invalid email or password");
+function selectMembership(memberships: StoredMembership[], hint?: ContextHint): StoredMembership {
+  const selected = pickDefaultMembership(memberships, hint);
+  const record = memberships.find(
+    (item) =>
+      selected &&
+      item.role === selected.role &&
+      item.partnerId === selected.partnerId &&
+      item.customerId === selected.customerId
+  );
+  if (!record) throw new AppError(403, "No matching tenant membership");
+  return record;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  name: string,
+  address: string,
+  phone?: string
+): Promise<AuthResult> {
+  const normalizedEmail = normalizeEmail(email);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const users = userRepository(tx);
+      const memberships = membershipRepository(tx);
+      const existing = await users.findByEmail(normalizedEmail);
+      if (existing) throw new AppError(409, "An account with this email already exists");
+      if ((await memberships.countByRole(ROLES.SUPER_ADMIN)) > 0) {
+        throw new AppError(403, "Registration is invite-only");
+      }
+      const user = await users.createWithCredential({
+        email: normalizedEmail,
+        name: name.trim(),
+        address: address.trim(),
+        phone: phone?.trim() || null,
+        status: "ACTIVE",
+        passwordHash: await hashPassword(password)
+      });
+      const membership = await memberships.create({
+        userId: user.id,
+        role: ROLES.SUPER_ADMIN,
+        partnerId: null,
+        customerId: null
+      });
+      return issueTokens(user, toStoredMembership(membership), tx);
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new AppError(409, "An account with this email already exists");
+    }
+    throw error;
   }
-  if (user.status !== "ACTIVE") throw new AuthError(403, "This account is not active");
-  return issueTokens(user, user.assignments.map((assignment) => assignment.role));
+}
+
+export async function login(email: string, password: string, hint?: ContextHint): Promise<AuthResult> {
+  const user = await userRepository().findByEmailWithAuth(normalizeEmail(email));
+  if (!user?.credential || !(await verifyPassword(user.credential.passwordHash, password))) {
+    throw new AppError(401, "Invalid email or password");
+  }
+  if (user.status !== "ACTIVE") throw new AppError(403, "This account is not active");
+  return issueTokens(user, selectMembership(user.memberships.map(toStoredMembership), hint));
+}
+
+export async function switchContext(userId: string, hint: ContextHint): Promise<AuthResult> {
+  const user = await userRepository().findByIdWithMemberships(userId);
+  if (!user || user.status !== "ACTIVE") throw new AppError(403, "This account is not active");
+  return issueTokens(user, selectMembership(user.memberships.map(toStoredMembership), hint));
 }
 
 export async function refresh(refreshToken: string): Promise<AuthResult> {
-  const session = await prisma.refreshSession.findUnique({
-    where: { tokenHash: hashToken(refreshToken) },
-    include: { user: { include: { assignments: true } } }
-  });
+  const session = await sessionRepository().findByTokenHash(hashToken(refreshToken));
   if (!session || session.revokedAt || session.expiresAt <= new Date() || session.user.status !== "ACTIVE") {
-    throw new AuthError(401, "Invalid refresh token");
+    throw new AppError(401, "Invalid refresh token");
   }
-  return prisma.$transaction(async (transaction) => {
-    await transaction.refreshSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
-    const nextRefreshToken = createRefreshToken();
-    await transaction.refreshSession.create({
-      data: {
-        userId: session.userId,
-        tokenHash: hashToken(nextRefreshToken),
-        expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL * 1000)
-      }
-    });
-    return {
-      accessToken: await createAccessToken(session.userId, session.user.assignments.map((assignment) => assignment.role), env.ACCESS_TOKEN_TTL),
-      idToken: await createIdToken(session.user.id, session.user.email, session.user.name, session.user.address, session.user.phone, session.user.assignments.map((assignment) => assignment.role), oidcIssuer(), env.ID_TOKEN_AUDIENCE, env.ID_TOKEN_TTL),
-      refreshToken: nextRefreshToken,
-      expiresIn: env.ACCESS_TOKEN_TTL
-    };
+
+  return prisma.$transaction(async (tx) => {
+    await sessionRepository(tx).revoke(session.id);
+    const memberships = (await membershipRepository(tx).listByUser(session.userId)).map(toStoredMembership);
+    const persisted = session.membershipId
+      ? memberships.find((item) => item.id === session.membershipId)
+      : undefined;
+    return issueTokens(session.user, persisted ?? selectMembership(memberships), tx);
   });
 }
 
 export async function logout(refreshToken: string): Promise<void> {
-  await prisma.refreshSession.updateMany({
-    where: { tokenHash: hashToken(refreshToken), revokedAt: null },
-    data: { revokedAt: new Date() }
-  });
+  await sessionRepository().revokeByTokenHash(hashToken(refreshToken));
 }

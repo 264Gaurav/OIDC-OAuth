@@ -3,7 +3,4 @@ dist/
 
 .env
 
-/docs
-docs/
-
 AGENTS.md

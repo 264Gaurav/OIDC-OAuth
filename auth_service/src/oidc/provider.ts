@@ -4,6 +4,7 @@ import { prisma } from "../db/prisma.js";
 import { redis } from "../db/redis.js";
 import { getSigningMaterial } from "./signing-keys.js";
 import { RedisAdapter } from "./adapter/redis.adapter.js";
+import { buildAuthClaims, pickDefaultMembership } from "../policy/index.js";
 
 type OidcAccount = {
   accountId: string;
@@ -11,12 +12,30 @@ type OidcAccount = {
 };
 
 async function findAccount(_ctx: unknown, accountId: string): Promise<OidcAccount | undefined> {
-  const user = await prisma.user.findUnique({ where: { id: accountId } });
+  const user = await prisma.user.findUnique({
+    where: { id: accountId },
+    include: { memberships: true }
+  });
   if (!user || user.status !== "ACTIVE") return undefined;
   return {
     accountId: user.id,
     claims: async (use, scope) => {
       const claims: Record<string, unknown> = { sub: user.id };
+      const membership = pickDefaultMembership(
+        user.memberships.map((row) => ({
+          userId: row.userId,
+          role: row.role,
+          partnerId: row.partnerId,
+          customerId: row.customerId
+        }))
+      );
+      if (membership) {
+        const tenancy = buildAuthClaims(membership);
+        claims.role = tenancy.role;
+        claims.scope = tenancy.scope;
+        claims.partner_id = tenancy.partner_id;
+        claims.customer_id = tenancy.customer_id;
+      }
       if (use === "userinfo" || scope?.includes("profile")) {
         claims.name = user.name;
         claims.address = user.address;

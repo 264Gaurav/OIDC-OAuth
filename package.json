@@ -7,7 +7,7 @@
     "build": "tsc",
     "dev": "tsx watch auth_service/src/app/server.ts",
     "start": "node auth_service/dist/app/server.js",
-    "test": "node --test",
+    "test": "tsx --test auth_service/src/policy/policy.test.ts auth_service/src/security/password.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

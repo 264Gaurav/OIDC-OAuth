@@ -21,19 +21,19 @@ enum Role {
 }
 
 model User {
-  id          String           @id @default(uuid()) @db.Uuid
-  email       String           @unique
-  name        String           @default("")
-  address     String           @default("")
-  phone       String?
-  status      UserStatus       @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  credential  Credential?
-  sessions    RefreshSession[]
-  assignments RoleAssignment[]
-  customer    Customer?
-  partner     Partner?
+  id           String           @id @default(uuid()) @db.Uuid
+  email        String           @unique
+  name         String           @default("")
+  address      String           @default("")
+  phone        String?
+  status       UserStatus       @default(PENDING)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  credential   Credential?
+  sessions     RefreshSession[]
+  memberships  Membership[]
+  ownedCustomer Customer?
+  ownedPartner  Partner?
 }
 
 model Credential {
@@ -44,43 +44,58 @@ model Credential {
 }
 
 model RefreshSession {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  tokenHash String   @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @db.Uuid
+  membershipId  String?      @db.Uuid
+  tokenHash     String       @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership    Membership?  @relation(fields: [membershipId], references: [id], onDelete: SetNull)
 
   @@index([userId, revokedAt])
+  @@index([membershipId])
 }
 
-model RoleAssignment {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  role      Role
-  partnerId String?  @db.Uuid
-  customerId String? @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Membership {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @db.Uuid
+  role       Role
+  partnerId  String?          @db.Uuid
+  customerId String?          @db.Uuid
+  scopeKey   String
+  createdAt  DateTime         @default(now())
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partner    Partner?         @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customer   Customer?        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sessions   RefreshSession[]
 
+  @@unique([userId, role, scopeKey])
   @@index([userId])
+  @@index([partnerId])
+  @@index([customerId])
 }
 
 model Partner {
-  id        String           @id @default(uuid()) @db.Uuid
-  name      String
-  ownerId   String?          @unique @db.Uuid
-  owner     User?            @relation(fields: [ownerId], references: [id])
-  customers Customer[]
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  ownerId     String?      @unique @db.Uuid
+  createdAt   DateTime     @default(now())
+  owner       User?        @relation(fields: [ownerId], references: [id])
+  customers   Customer[]
+  memberships Membership[]
 }
 
 model Customer {
-  id        String  @id @default(uuid()) @db.Uuid
-  name      String
-  partnerId String  @db.Uuid
-  ownerId   String? @unique @db.Uuid
-  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
-  owner     User?   @relation(fields: [ownerId], references: [id])
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  partnerId   String       @db.Uuid
+  ownerId     String?      @unique @db.Uuid
+  createdAt   DateTime     @default(now())
+  partner     Partner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  owner       User?        @relation(fields: [ownerId], references: [id])
+  memberships Membership[]
 
   @@index([partnerId])
 }

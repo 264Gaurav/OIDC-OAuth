@@ -46,5 +46,5 @@
     "skipLibCheck": true,
   },
   "include": ["./auth_service/src/**/*"],
-  "exclude": ["node_modules", "./auth_service/dist"]
+  "exclude": ["node_modules", "./auth_service/dist", "./auth_service/src/**/*.test.ts"]
 }
