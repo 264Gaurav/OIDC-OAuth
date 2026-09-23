@@ -277,6 +277,449 @@ Use the discovery response as the source of truth for endpoint URLs and supporte
 | Introspection | `/oidc/token/introspection` |
 | End session | `/oidc/session/end` |
 
+## API Reference
+
+All request bodies are `application/json` unless noted. Required fields are marked *(required)*, optional with `?`.
+
+---
+
+### Auth Routes (`/api/auth`)
+
+#### `POST /api/auth/register`
+
+**Purpose:** Create a new user account. Returns access token, ID token, and refresh token on success.
+
+**Request body:**
+```json
+{
+  "email": "alice@example.com",
+  "password": "CorrectHorseBattery12!",
+  "name": "Alice Example",
+  "address": "1 Example Street, Example City",
+  "phone": "+1-555-0100"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `email` | string | ✅ | Must be a valid email address |
+| `password` | string | ✅ | 12–128 characters |
+| `name` | string | ❌ | Display name |
+| `address` | string | ❌ | Physical address |
+| `phone` | string | ❌ | Phone number |
+
+**Response `201`:**
+```json
+{
+  "accessToken": "<signed-access-token>",
+  "idToken": "<identity-token>",
+  "refreshToken": "<opaque-refresh-token>",
+  "expiresIn": 900
+}
+```
+
+**Errors:** `400` invalid body, `409` email already registered.
+
+---
+
+#### `POST /api/auth/login`
+
+**Purpose:** Authenticate an existing user. Returns access token, ID token, and refresh token.
+
+**Request body:**
+```json
+{
+  "email": "alice@example.com",
+  "password": "CorrectHorseBattery12!"
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `email` | string | ✅ |
+| `password` | string | ✅ |
+
+**Response `200`:**
+```json
+{
+  "accessToken": "<signed-access-token>",
+  "idToken": "<identity-token>",
+  "refreshToken": "<opaque-refresh-token>",
+  "expiresIn": 900
+}
+```
+
+**Errors:** `400` invalid body, `401` wrong credentials, `403` account disabled.
+
+---
+
+#### `POST /api/auth/refresh`
+
+**Purpose:** Rotate a refresh token. Returns a new access token and a new refresh token. The old refresh token is immediately invalidated.
+
+**Request body:**
+```json
+{
+  "refreshToken": "<current-refresh-token>"
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `refreshToken` | string | ✅ |
+
+**Response `200`:**
+```json
+{
+  "accessToken": "<new-access-token>",
+  "idToken": "<identity-token>",
+  "refreshToken": "<new-refresh-token>",
+  "expiresIn": 900
+}
+```
+
+**Errors:** `400` missing field, `401` token invalid or already used.
+
+---
+
+#### `POST /api/auth/logout`
+
+**Purpose:** Revoke a refresh token, ending the session.
+
+**Request body:**
+```json
+{
+  "refreshToken": "<current-refresh-token>"
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `refreshToken` | string | ✅ |
+
+**Response:** `204 No Content`
+
+**Errors:** `400` missing field.
+
+---
+
+#### `POST /api/auth/context`
+
+**Purpose:** Return the authenticated user's server-side identity context. Used internally to verify what identity is bound to the current access token.
+
+**Headers:**
+```
+Authorization: Bearer <access-token>
+```
+
+**Response `200`:**
+```json
+{
+  "userId": "<uuid>",
+  "email": "alice@example.com",
+  "roles": ["PARTNER_USER"],
+  "partnerId": "<uuid>",
+  "customerId": null
+}
+```
+
+**Errors:** `401` missing or invalid token.
+
+---
+
+### Health Routes (`/health`)
+
+#### `GET /health/live`
+
+**Purpose:** Liveness probe. Confirms the Node process is running.
+
+**Response `200`:**
+```json
+{ "status": "ok" }
+```
+
+---
+
+#### `GET /health/ready`
+
+**Purpose:** Readiness probe. Confirms PostgreSQL and Redis are reachable.
+
+**Response `200`:**
+```json
+{ "status": "ready" }
+```
+
+**Response `503`:**
+```json
+{ "status": "not_ready" }
+```
+
+---
+
+### Customer Routes (`/api/customers`)
+
+> All customer routes require `Authorization: Bearer <access-token>`.
+
+#### `GET /api/customers/:id`
+
+**Purpose:** Retrieve details of a customer by ID.
+
+**Path params:** `id` — customer UUID
+
+**Response `200`:**
+```json
+{
+  "id": "<uuid>",
+  "name": "Customer Corp",
+  "partnerId": "<uuid>",
+  "status": "active"
+}
+```
+
+**Errors:** `401` unauthenticated, `403` not authorized, `404` not found.
+
+---
+
+#### `POST /api/customers/:id/members`
+
+**Purpose:** Invite a user to join a customer organization.
+
+**Path params:** `id` — customer UUID
+
+**Request body:**
+```json
+{
+  "email": "newmember@example.com",
+  "role": "CUSTOMER_USER"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `email` | string | ✅ | Email of the user to invite |
+| `role` | string | ✅ | `CUSTOMER_ADMIN` or `CUSTOMER_USER` |
+
+**Response `201`:**
+```json
+{
+  "message": "Invitation sent"
+}
+```
+
+**Errors:** `400` invalid body, `401` unauthenticated, `403` not authorized, `404` customer not found.
+
+---
+
+### Partner Routes (`/api/partners`)
+
+> All partner routes require `Authorization: Bearer <access-token>`.
+
+#### `POST /api/partners`
+
+**Purpose:** Create a new partner organization.
+
+**Request body:**
+```json
+{
+  "name": "Acme Partner Inc."
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | string | ✅ |
+
+**Response `201`:**
+```json
+{
+  "id": "<uuid>",
+  "name": "Acme Partner Inc.",
+  "status": "active"
+}
+```
+
+**Errors:** `400` invalid body, `401` unauthenticated, `403` not authorized.
+
+---
+
+#### `GET /api/partners/:id`
+
+**Purpose:** Retrieve details of a partner by ID.
+
+**Path params:** `id` — partner UUID
+
+**Response `200`:**
+```json
+{
+  "id": "<uuid>",
+  "name": "Acme Partner Inc.",
+  "status": "active"
+}
+```
+
+**Errors:** `401` unauthenticated, `403` not authorized, `404` not found.
+
+---
+
+#### `POST /api/partners/:id/customers`
+
+**Purpose:** Create a customer organization that belongs to the given partner.
+
+**Path params:** `id` — partner UUID
+
+**Request body:**
+```json
+{
+  "name": "Customer Corp"
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `name` | string | ✅ |
+
+**Response `201`:**
+```json
+{
+  "id": "<uuid>",
+  "name": "Customer Corp",
+  "partnerId": "<uuid>",
+  "status": "active"
+}
+```
+
+**Errors:** `400` invalid body, `401` unauthenticated, `403` not authorized, `404` partner not found.
+
+---
+
+#### `POST /api/partners/:id/members`
+
+**Purpose:** Invite a user to join a partner organization.
+
+**Path params:** `id` — partner UUID
+
+**Request body:**
+```json
+{
+  "email": "partnermember@example.com",
+  "role": "PARTNER_USER"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `email` | string | ✅ | Email of the user to invite |
+| `role` | string | ✅ | `PARTNER_ADMIN` or `PARTNER_USER` |
+
+**Response `201`:**
+```json
+{
+  "message": "Invitation sent"
+}
+```
+
+**Errors:** `400` invalid body, `401` unauthenticated, `403` not authorized, `404` partner not found.
+
+---
+
+### User Routes (`/api/users`)
+
+> All user routes require `Authorization: Bearer <access-token>`.
+
+#### `GET /api/users/:id`
+
+**Purpose:** Retrieve user profile data.
+
+**Path params:** `id` — user UUID
+
+**Response `200`:**
+```json
+{
+  "id": "<uuid>",
+  "email": "alice@example.com",
+  "name": "Alice Example",
+  "address": "1 Example Street",
+  "phone": "+1-555-0100",
+  "status": "active",
+  "roles": ["PARTNER_USER"]
+}
+```
+
+**Errors:** `401` unauthenticated, `403` not authorized, `404` not found.
+
+---
+
+### Utils Routes (`/utils`)
+
+#### `GET /utils/createPublicKey`
+
+**Purpose:** Return the active OIDC RS256 signing public key for this service instance. The same key material is published at `/oidc/jwks`. Useful for configuring resource servers to validate JWTs locally.
+
+> No authentication required.
+
+**Response `200` (JSON):**
+```json
+{
+  "issuer": "http://localhost:3000/oidc",
+  "jwksUrl": "http://localhost:3000/oidc/jwks",
+  "kid": "sig-1",
+  "alg": "RS256",
+  "use": "sig",
+  "kty": "RSA",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n",
+  "jwk": {
+    "kty": "RSA",
+    "n": "...",
+    "e": "AQAB",
+    "kid": "sig-1",
+    "alg": "RS256",
+    "use": "sig"
+  }
+}
+```
+
+Opening this URL in a browser returns a human-readable HTML page.
+
+---
+
+#### `POST /utils/createPublicKey`
+
+**Purpose:** Convert an RSA JWK public key to PEM (SPKI) format. Useful for runtimes or libraries that require PEM instead of raw JWK `n`/`e` values.
+
+> No authentication required.
+
+**Request body:**
+```json
+{
+  "kty": "RSA",
+  "n": "<base64url-modulus-from-jwks>",
+  "e": "AQAB",
+  "alg": "RS256",
+  "kid": "sig-1",
+  "use": "sig"
+}
+```
+
+| Field | Type | Required |
+|---|---|---|
+| `kty` | string | ✅ Must be `"RSA"` |
+| `n` | string | ✅ Base64url-encoded modulus |
+| `e` | string | ✅ Base64url-encoded exponent |
+| `alg` | string | ❌ |
+| `kid` | string | ❌ |
+| `use` | string | ❌ |
+
+**Response `200`:**
+```json
+{
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+}
+```
+
+**Errors:** `400` missing or invalid fields.
+
+---
+
 The development client is:
 
 ```text
