@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, createHash } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { getSigningMaterial, SIGNING_KEY_ID } from "../oidc/signing-keys.js";
 import { authClaimsSchema, type AuthClaims } from "../policy/claims.js";
@@ -59,8 +59,12 @@ export function createRefreshToken(): string {
   return randomBytes(48).toString("base64url");
 }
 
+// export function hashToken(token: string): string {
+//   return createHmac("sha256", token).digest("hex");
+// }
+
 export function hashToken(token: string): string {
-  return createHmac("sha256", token).digest("hex");
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export async function createIdToken(
